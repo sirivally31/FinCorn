@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinRecon AI — Autonomous Reconciliation &amp; Cash Intelligence</title>
+<link rel="stylesheet" href="/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">FR</div>
+      <div>
+        <div class="brand-name">FinRecon AI</div>
+        <div class="brand-tag">Finance Controller</div>
+      </div>
+    </div>
+    <nav id="nav">
+      <button class="nav-item active" data-page="dashboard">Dashboard</button>
+      <button class="nav-item" data-page="reconciliation">Reconciliation</button>
+      <button class="nav-item" data-page="exceptions">Exceptions</button>
+      <button class="nav-item" data-page="settlements">Settlements</button>
+      <button class="nav-item" data-page="cash">Cash Position</button>
+      <button class="nav-item" data-page="forecast">Forecast</button>
+      <button class="nav-item" data-page="merchants">Merchants</button>
+      <button class="nav-item" data-page="assistant">AI Finance Assistant</button>
+      <button class="nav-item" data-page="audit">Audit Log</button>
+      <button class="nav-item" data-page="settings">Settings</button>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="demo-pill">SYNTHETIC DEMO DATA</span>
+    </div>
+  </aside>
+
+  <main class="content">
+    <header class="topbar">
+      <div>
+        <h1 id="page-title">Dashboard</h1>
+        <p id="page-subtitle" class="muted">Autonomous reconciliation and cash intelligence for payment operations.</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost" id="btn-refresh">Refresh Dashboard</button>
+        <button class="btn btn-primary" id="btn-run">Run Reconciliation</button>
+        <button class="btn btn-danger" id="btn-reset">Reset Demo</button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner hidden"></div>
+
+    <section id="page-dashboard" class="page"></section>
+    <section id="page-reconciliation" class="page hidden"></section>
+    <section id="page-exceptions" class="page hidden"></section>
+    <section id="page-settlements" class="page hidden"></section>
+    <section id="page-cash" class="page hidden"></section>
+    <section id="page-forecast" class="page hidden"></section>
+    <section id="page-merchants" class="page hidden"></section>
+    <section id="page-assistant" class="page hidden"></section>
+    <section id="page-audit" class="page hidden"></section>
+    <section id="page-settings" class="page hidden"></section>
+  </main>
+</div>
+
+<div id="modal-backdrop" class="modal-backdrop hidden">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<div id="progress-overlay" class="progress-overlay hidden">
+  <div class="progress-card">
+    <h3>Processing reconciliation…</h3>
+    <ul id="progress-steps"></ul>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
