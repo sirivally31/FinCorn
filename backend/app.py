@@ -372,7 +372,9 @@ def _build_query_context():
         "tax_mismatch_count": tax_mismatch_count,
         "date_tolerance_hours": reconciliation.TOLERANCE_DATE_HOURS,
         "cash_position": cp,
+        "forecast_horizons": fc,
         "forecast_1d": next((f for f in fc if f["horizonDays"] == 1), None),
+        "forecast_7d": next((f for f in fc if f["horizonDays"] == 7), None),
     }
 
 
@@ -424,4 +426,4 @@ if __name__ == "__main__":
     bootstrap()
     port = int(os.environ.get("PORT", 8080))
     print(f"FinRecon AI backend running: http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)

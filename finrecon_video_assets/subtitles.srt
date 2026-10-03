@@ -1,0 +1,47 @@
+1
+00:00:00,000 --> 00:00:20,000
+Meet FinRecon AI, an AI-powered Finance Controller designed to close the financial reconciliation loop.
+
+2
+00:00:20,000 --> 00:00:45,000
+Finance teams compare multiple sources to understand whether money actually settled correctly.
+
+3
+00:00:45,000 --> 00:01:00,000
+A reproducible synthetic dataset: 150 payments, 146 settlements, 150 ledger entries, and 29 exception scenarios.
+
+4
+00:01:00,000 --> 00:01:15,000
+Payment, settlement, and ledger records are brought together so the reconciliation result can be inspected.
+
+5
+00:01:15,000 --> 00:01:45,000
+152 records evaluated. 86.18% reconciliation match rate. 8 auto-resolved. 21 left for investigation.
+
+6
+00:01:45,000 --> 00:02:00,000
+100% classification accuracy against deterministic synthetic ground truth. 0 false matches. 0 missed exceptions.
+
+7
+00:02:00,000 --> 00:02:30,000
+AI explains the evidence and recommends a manual cross-check. It does not decide the financial truth.
+
+8
+00:02:30,000 --> 00:02:50,000
+Human review keeps financial decisions under control, and every action is recorded in the audit trail.
+
+9
+00:02:50,000 --> 00:03:10,000
+Current cash: ₹11,10,071.20. Pending settlements: ₹1,10,071.20.
+
+10
+00:03:10,000 --> 00:03:30,000
+One-day, three-day, and seven-day projected balances use a transparent moving-average model.
+
+11
+00:03:30,000 --> 00:03:55,000
+The Finance Assistant answers free-text questions from the current reconciliation dataset.
+
+12
+00:03:55,000 --> 00:04:00,000
+Deterministic truth. Human control. Cash intelligence. FinRecon AI, AI Finance Controller.

@@ -51,7 +51,7 @@ def run_reconciliation(ai_provider=None):
     and every orphan settlement in the database, writes results to the
     `reconciliations` and `exceptions` tables, and returns summary metrics.
     """
-    start_time = time.time()
+    start_time = time.perf_counter()
     
     conn = get_connection()
     cur = conn.cursor()
@@ -275,8 +275,8 @@ def run_reconciliation(ai_provider=None):
     conn.commit()
     conn.close()
     
-    end_time = time.time()
-    processing_time_ms = round((end_time - start_time) * 1000)
+    end_time = time.perf_counter()
+    processing_time_ms = max(0, round((end_time - start_time) * 1000))
     return compute_summary(processing_time_ms)
 
 

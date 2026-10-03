@@ -1,0 +1,17 @@
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Local database state
+/data/*.db
+/data/*.sqlite
+/data/*.sqlite3
+
+# Python caches
+__pycache__/
+*.pyc
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

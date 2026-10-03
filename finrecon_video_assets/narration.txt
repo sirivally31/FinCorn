@@ -1,0 +1,23 @@
+Meet FinRecon AI, an AI-powered Finance Controller designed to close the financial reconciliation loop. It connects payment, settlement and ledger records, identifies exceptions, explains what happened, and turns the results into actionable cash visibility.
+
+Finance teams often have to compare multiple financial sources to understand whether money actually settled correctly. Small discrepancies can become manual investigation work, delayed reconciliation, and poor visibility into cash.
+
+FinRecon AI uses a reproducible synthetic dataset containing 150 payments, 146 settlements, 150 ledger entries, and 29 deliberately injected exception scenarios.
+
+The live application shows the finance controller workflow. Payment, settlement, and ledger records are brought together so the reconciliation result can be inspected rather than assumed.
+
+The reconciliation engine applies deterministic financial rules to compare the records. In this run, 152 records were evaluated, with an 86.18 percent reconciliation match rate, eight cases safely auto-resolved within configured tolerance bands, and 21 exceptions left for investigation.
+
+Because this is a controlled synthetic dataset, FinRecon AI can evaluate its classifications against known ground truth. The deterministic engine achieved 100 percent classification accuracy, with zero false matches and zero missed exceptions. This is not an AI accuracy claim.
+
+Instead of hiding discrepancies behind a single score, FinRecon AI exposes the actual exceptions. For transaction TXN-1150, the payment is 26,137 rupees and the settlement is 26,087 rupees: a 50 rupee difference beyond the 5 rupee tolerance. AI explains the evidence and recommends a manual cross-check. It does not decide the financial truth.
+
+Cases that cannot be safely resolved remain in a human review queue. A finance operator can resolve or escalate an exception, and the action is recorded in the audit trail. Financial decisions stay under human control.
+
+Once reconciliation is complete, the results become useful beyond exception management. FinRecon AI converts the financial state into a current cash position and highlights unsettled money. The live demo shows current cash of 1,110,071 rupees and pending settlements of 110,071 rupees.
+
+The system then turns the reconciled financial position into forward-looking cash visibility. The forecast shows one-day, three-day, and seven-day projected balances using a transparent moving-average model derived from the synthetic transaction history.
+
+Finally, the Finance Assistant provides a conversational interface over the financial data. A controller can ask free-text questions such as what is causing the settlement gap, which discrepancies are largest, or why the match rate is not 100 percent, instead of manually searching through records.
+
+FinRecon AI closes one finance-operations loop from reconciliation to investigation to cash intelligence. Deterministic logic establishes financial truth, AI explains and investigates it, and humans remain in control of financial decisions. FinRecon AI, AI Finance Controller.

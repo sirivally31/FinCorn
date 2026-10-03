@@ -12,6 +12,7 @@ reconciliation engine). Nothing is invented.
 """
 import os
 import json
+import re
 import urllib.request
 
 
@@ -85,68 +86,116 @@ class MockAIProvider(AIProvider):
         return explanation, action
 
     def answer_query(self, question, context: dict):
-        q = question.lower()
-        s = context["summary"]
+        q = (question or "").strip().lower()
+        s = context.get("summary", {}) or {}
 
         def fmt(v):
-            return f"Rs.{v:,.2f}"
+            return f"Rs.{float(v):,.2f}"
 
-        if "fail" in q or "unresolved" in q and "how many" in q:
-            return (f"{s['unresolvedRecords']} of {s['recordsProcessed']} transactions "
-                    f"({s['exceptionRate']}%) are currently unresolved and need manual review.")
-        if "unresolved amount" in q or ("total" in q and "unresolved" in q):
-            return (f"The total unresolved exception value is {fmt(s['unresolvedExceptionValue'])} "
-                    f"across {s['unresolvedRecords']} unresolved transactions.")
-        if "settlement" in q and ("lower" in q or "gap" in q or "why" in q):
-            gap = s['settlementDifference']
-            direction = "below" if gap > 0 else "above"
-            return (f"Total settlement value is {fmt(s['totalSettlementValue'])} against "
-                    f"{fmt(s['totalPaymentValue'])} in payments - a gap of {fmt(abs(gap))} "
-                    f"{direction} expected. This is driven by {s['unresolvedRecords']} unresolved "
-                    f"exceptions (missing settlements, amount mismatches and partial settlements) "
-                    f"worth {fmt(s['unresolvedExceptionValue'])}, plus {s['autoResolvedRecords']} "
-                    f"auto-resolved fee/tax/timing differences.")
-        if "top exception" in q or "exception types" in q or "which exception" in q:
+        if not q:
+            return "Please enter a finance question to get a grounded answer."
+
+        if re.search(r"\b(mark|reconciled|resolve|resolved)\b", q) and "transaction" in q:
+            return ("I cannot mark transactions as reconciled or change the financial truth. "
+                    "The deterministic engine owns reconciliation; use the human-review workflow in the Exceptions queue for any required action.")
+
+        if "how much money is currently unsettled" in q or "currently unsettled" in q or ("unsettled" in q and ("money" in q or "amount" in q)):
+            unsettled = context.get("cash_position", {}).get("pendingSettlementAmount", s.get("unresolvedExceptionValue", 0))
+            return f"The currently unsettled amount is {fmt(unsettled)}."
+
+        if "largest financial discrepancy" in q or "largest discrepancy" in q or "largest settlement discrepancy" in q:
+            top = context.get("top_exceptions", [])
+            if top:
+                entry = top[0]
+                return f"The largest identified discrepancy today is {entry.get('exception_type', 'an unresolved exception')} at {fmt(entry.get('value', 0))}."
+            return "I do not have enough exception data to identify the largest discrepancy."
+
+        if "what is causing the current settlement gap" in q or "settlement gap" in q and "why" in q:
+            gap = s.get("settlementDifference", 0)
+            return (f"The settlement gap is {fmt(abs(gap))} {('below' if gap > 0 else 'above')} the expected payment total. "
+                    f"It is driven by {s.get('unresolvedRecords', 0)} unresolved exceptions worth {fmt(s.get('unresolvedExceptionValue', 0))}, "
+                    f"including missing settlements and amount mismatches.")
+
+        if "cash position" in q and "tomorrow" not in q and "expected" not in q and "current" in q:
+            cp = context.get("cash_position", {})
+            return (f"Current cash position is {fmt(cp.get('currentCashPosition', s.get('currentCash', 0)))}. "
+                    f"Pending settlement exposure is {fmt(cp.get('pendingSettlementAmount', 0))}.")
+
+        if "next 7 days" in q or "7 day" in q or "7-day" in q or "expected cash position over the next 7 days" in q or ("expected cash" in q and "7" in q):
+            fc = context.get("forecast_7d") or next((f for f in context.get("forecast_horizons", []) if f.get("horizonDays") == 7), None) or context.get("forecast_1d")
+            if not fc:
+                return "Forecast data is not available for the next 7 days in the current dataset."
+            return (f"Expected cash position in 7 days is {fmt(fc.get('projectedBalance', 0))} with expected inflow {fmt(fc.get('expectedInflow', 0))} "
+                    f"and expected outflow {fmt(fc.get('expectedOutflow', 0))}; confidence is {fc.get('confidence', 0)}%.")
+
+        if "what is our current cash position" in q or "current cash position" in q:
+            cp = context.get("cash_position", {})
+            return f"Current cash position is {fmt(cp.get('currentCashPosition', s.get('currentCash', 0)))}."
+
+        if "what percentage of transactions matched" in q or "percentage of transactions matched" in q or "match rate" in q and "percentage" in q:
+            return f"{s.get('matchRate', 0)}% of transactions matched or were safely auto-resolved."
+
+        if "match rate is not 100" in q or "reconciliation match rate is not 100" in q or "why" in q and "match rate" in q:
+            return (f"The match rate is {s.get('matchRate', 0)}% because {s.get('unresolvedRecords', 0)} transactions remain unresolved, "
+                    f"worth {fmt(s.get('unresolvedExceptionValue', 0))}, while {s.get('autoResolvedRecords', 0)} were safely auto-resolved.")
+
+        if "issue should a finance controller investigate first" in q or "investigate first" in q:
+            top = context.get("top_exceptions", [])
+            if top:
+                first = top[0]
+                return f"The highest-priority issue is {first.get('exception_type', 'an unresolved exception')}, appearing {first.get('count', 0)} time(s)."
+            return "There is no unresolved exception data to rank right now."
+
+        if "main reasons transactions remain unresolved" in q or "reasons transactions remain unresolved" in q:
+            top = context.get("top_exceptions", [])
+            if not top:
+                return "No unresolved exception reasons are present in the current data."
+            fragments = [f"{t.get('exception_type', 'Unknown')} ({t.get('count', 0)} case(s))" for t in top[:3]]
+            return "The main unresolved reasons are: " + "; ".join(fragments) + "."
+
+        if "merchant" in q and ("most unresolved" in q or "highest" in q or "top" in q or "most" in q):
+            merch = context.get("top_merchants", [])
+            if not merch:
+                return "No merchant exception data is available yet."
+            lines = [f"{m['name']} ({m['count']} unresolved cases, {fmt(m['value'])})" for m in merch[:5]]
+            return "Merchants with the most unresolved exceptions: " + "; ".join(lines) + "."
+
+        if "top exception" in q or "exception types" in q or "which exception" in q or "exception type" in q:
             top = context.get("top_exceptions", [])
             if not top:
                 return "There are no open exceptions in the current dataset."
             lines = [f"{t['exception_type']}: {t['count']} case(s), {fmt(t['value'])}" for t in top[:5]]
-            return "Top exception types by frequency: " + "; ".join(lines) + "."
-        if "merchant" in q and ("highest" in q or "top" in q or "most" in q):
-            merch = context.get("top_merchants", [])
-            if not merch:
-                return "No merchant exception data is available yet - run reconciliation first."
-            lines = [f"{m['name']} ({m['count']} exceptions, {fmt(m['value'])})" for m in merch[:5]]
-            return "Merchants with the most reconciliation exceptions: " + "; ".join(lines) + "."
+            return "Top exception types: " + "; ".join(lines) + "."
+
         if "settlement delay" in q or "delayed" in q:
             n = context.get("delay_count", 0)
-            return (f"{n} transaction(s) show a settlement delay beyond the "
-                    f"{context.get('date_tolerance_hours', 48)}-hour SLA.")
-        if "cash position" in q and "tomorrow" not in q and "expected" not in q:
-            cp = context["cash_position"]
-            return (f"Current cash position is {fmt(cp['currentCashPosition'])}. "
-                    f"Pending settlements of {fmt(cp['pendingSettlementAmount'])} are expected "
-                    f"to be received, against {fmt(cp['expectedSettlementInflow'])} in scheduled inflows.")
-        if "tomorrow" in q or "next day" in q or "expected cash" in q:
-            fc = context.get("forecast_1d")
-            if not fc:
-                return "Forecast data is not available - run reconciliation first."
-            return (f"Projected cash position for tomorrow is {fmt(fc['projectedBalance'])} "
-                    f"(expected inflow {fmt(fc['expectedInflow'])}, expected outflow "
-                    f"{fmt(fc['expectedOutflow'])}, confidence {fc['confidence']}%).")
+            return f"{n} transaction(s) show a settlement delay beyond the allowed {context.get('date_tolerance_hours', 48)}-hour SLA."
+
         if "tax mismatch" in q:
             n = context.get("tax_mismatch_count", 0)
             return f"{n} transaction(s) currently show a tax mismatch between settlement and payment records."
-        if "match rate" in q or "accuracy" in q:
-            return (f"Current reconciliation match rate is {s['matchRate']}% "
-                    f"({s['matchedRecords'] + s['autoResolvedRecords']} of {s['recordsProcessed']} "
-                    f"records matched or safely auto-resolved).")
 
-        # Generic grounded summary fallback
-        return (f"Based on the current dataset: {s['recordsProcessed']} records processed, "
-                f"{s['matchRate']}% match rate, {s['unresolvedRecords']} unresolved exceptions "
-                f"worth {fmt(s['unresolvedExceptionValue'])}. Ask about match rate, cash position, "
-                f"settlement gap, top exception types, or specific merchants for more detail.")
+        if "unresolved" in q and ("how many" in q or "count" in q or "failed" in q):
+            return (f"{s.get('unresolvedRecords', 0)} of {s.get('recordsProcessed', 0)} transactions "
+                    f"({s.get('exceptionRate', 0)}%) are unresolved and require manual review.")
+
+        if "unresolved amount" in q or "total unresolved" in q or ("unresolved" in q and "amount" in q):
+            return (f"The total unresolved exception value is {fmt(s.get('unresolvedExceptionValue', 0))} "
+                    f"across {s.get('unresolvedRecords', 0)} unresolved transactions.")
+
+        if "settlement" in q and ("lower" in q or "gap" in q or "why" in q or "shortfall" in q):
+            gap = s.get("settlementDifference", 0)
+            direction = "below" if gap > 0 else "above"
+            return (f"Total settlement value is {fmt(s.get('totalSettlementValue', 0))} compared with {fmt(s.get('totalPaymentValue', 0))} in payments. "
+                    f"The current gap is {fmt(abs(gap))} {direction} expected, driven by unresolved exceptions worth {fmt(s.get('unresolvedExceptionValue', 0))}.")
+
+        if "match rate" in q or "accuracy" in q or "matched" in q and "transactions" in q:
+            return (f"Current reconciliation match rate is {s.get('matchRate', 0)}% and classification accuracy is {s.get('accuracy', 0)}%. "
+                    f"{s.get('matchedRecords', 0) + s.get('autoResolvedRecords', 0)} of {s.get('recordsProcessed', 0)} records matched or were auto-resolved.")
+
+        return (f"Based on the current dataset: {s.get('recordsProcessed', 0)} records processed, "
+                f"{s.get('matchRate', 0)}% match rate, {s.get('unresolvedRecords', 0)} unresolved exceptions, "
+                f"and {fmt(s.get('unresolvedExceptionValue', 0))} in unresolved value. Ask about cash position, settlement gap, exception types, or merchant risk for more detail.")
 
 
 class OpenAIProvider(AIProvider):

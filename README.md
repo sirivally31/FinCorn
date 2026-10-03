@@ -104,8 +104,8 @@ Docker/Maven/npm install is required:
   `cash.py` (cash position + forecast), `ai_provider.py` (AI abstraction),
   `app.py` (REST API + static file serving).
 - **Frontend:** a single-page vanilla JS/HTML/CSS dashboard (no build step,
-  no bundler) + Chart.js via CDN, served by the same Flask process on the
-  same port.
+  no bundler), served by the same Flask process on the same port with an
+  offline-safe canvas fallback for charts.
 - **Database:** SQLite file at `data/finrecon.db`. Schema mirrors what a
   PostgreSQL production schema would look like (see "Production notes"
   below for the translation).
@@ -243,8 +243,7 @@ FinRecon AI features a secure backend-only validation for Razorpay keys restrict
 ### Requirements
 - Python 3.9+ (Flask is the only pip dependency; everything else is
   stdlib)
-- A modern browser (for Chart.js, loaded from a CDN — this needs internet
-  access in *your* browser, not on the machine running the server)
+- A modern browser with JavaScript enabled
 
 ### Start (Linux/Mac)
 ```bash

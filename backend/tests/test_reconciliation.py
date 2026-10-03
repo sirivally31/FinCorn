@@ -92,6 +92,10 @@ class TestFinReconEngine(unittest.TestCase):
         conn.close()
         self.assertEqual(real_total, self.summary["recordsProcessed"])
 
+    def test_processing_time_is_measured(self):
+        self.assertIsInstance(self.summary["processingTimeMs"], (int, float))
+        self.assertGreater(self.summary["processingTimeMs"], 0)
+
     # ---- Cash position ----
     def test_cash_position_calculation(self):
         cp = cash.compute_cash_position()
@@ -132,6 +136,65 @@ class TestFinReconEngine(unittest.TestCase):
         exc = conn.execute("SELECT * FROM exceptions LIMIT 1").fetchone()
         conn.close()
         self.assertIn(exc["transaction_id"], exc["ai_explanation"])
+
+    def test_mock_ai_handles_required_free_text_questions(self):
+        provider = MockAIProvider()
+        context = {
+            "summary": {
+                "recordsProcessed": 152,
+                "matchedRecords": 123,
+                "autoResolvedRecords": 8,
+                "unresolvedRecords": 21,
+                "matchRate": 86.18,
+                "totalPaymentValue": 2007395.00,
+                "totalSettlementValue": 1896495.00,
+                "settlementDifference": 110900.0,
+                "unresolvedExceptionValue": 182002.5,
+                "exceptionRate": 13.82,
+            },
+            "top_exceptions": [
+                {"exception_type": "MISSING_SETTLEMENT", "count": 6, "value": 120000.0},
+                {"exception_type": "AMOUNT_MISMATCH", "count": 5, "value": 45000.0},
+            ],
+            "top_merchants": [
+                {"name": "Sharma Electronics", "count": 7, "value": 45000.0},
+                {"name": "Fresh Basket Grocers", "count": 4, "value": 32000.0},
+            ],
+            "cash_position": {
+                "currentCashPosition": 1110071.2,
+                "pendingSettlementAmount": 110900.0,
+                "expectedSettlementInflow": 110900.0,
+            },
+            "forecast_7d": {
+                "projectedBalance": 1210263.93,
+                "expectedInflow": 1277433.18,
+                "expectedOutflow": 1177240.45,
+                "confidence": 60,
+                "horizonDays": 7,
+            },
+            "delay_count": 2,
+            "tax_mismatch_count": 1,
+            "date_tolerance_hours": 48,
+        }
+
+        answers = {
+            "What is our current cash position?": "current cash position",
+            "What is causing the current settlement gap?": "settlement gap",
+            "Which merchants have the most unresolved exceptions?": "Sharma Electronics",
+            "What is the largest financial discrepancy?": "largest",
+            "How much money is currently unsettled?": "unsettled",
+            "What is our expected cash position over the next 7 days?": "7",
+            "Which issue should a finance controller investigate first?": "MISSING_SETTLEMENT",
+            "What percentage of transactions matched?": "86.18%",
+            "Explain why the reconciliation match rate is not 100%.": "unresolved",
+            "What are the main reasons transactions remain unresolved?": "MISSING_SETTLEMENT",
+            "Mark transaction TXN-1001 as reconciled.": "cannot",
+        }
+
+        for question, expected_marker in answers.items():
+            answer = provider.answer_query(question, context)
+            self.assertIsInstance(answer, str)
+            self.assertTrue(expected_marker.lower() in answer.lower(), f"Question: {question}\nAnswer: {answer}")
 
     # ---- Genuine Evaluation Metrics Test ----
     def test_evaluation_accuracy(self):

@@ -12,8 +12,12 @@ python3 -m unittest tests.test_reconciliation -v
 echo "   OK"
 
 echo "3) Checking frontend JS syntax..."
-node -c ../frontend/app.js
-echo "   OK"
+if command -v node >/dev/null 2>&1; then
+  node -c ../frontend/app.js
+  echo "   OK"
+else
+  echo "   Skipping frontend JS syntax check (node not installed; this project runs without a frontend build step)"
+fi
 
 echo "4) Starting server and checking health + key endpoints..."
 rm -f ../data/*.db
