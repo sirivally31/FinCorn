@@ -28,6 +28,10 @@ nav{display:flex;flex-direction:column;gap:2px;flex:1;}
 h1{margin:0;font-size:22px;}
 .muted{color:var(--muted);font-size:13px;margin:4px 0 0;}
 .topbar-actions{display:flex;gap:10px;flex-wrap:wrap;}
+.live-status{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;white-space:nowrap;}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);}
+.live-status.live .live-dot{background:var(--green);}
+.live-status.offline .live-dot{background:var(--red);}
 .btn{border:none;padding:10px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;}
 .btn-primary:hover{filter:brightness(1.1);}

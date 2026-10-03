@@ -1,5 +1,8 @@
 const API = "/api";
 let charts = {};
+let activePage = "dashboard";
+let liveRefreshInProgress = false;
+const LIVE_REFRESH_MS = 10000;
 
 function fmtINR(v){
   if(v === null || v === undefined) return "—";
@@ -40,6 +43,7 @@ const PAGE_META = {
 };
 
 async function gotoPage(page){
+  activePage = page;
   document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.page===page));
   document.querySelectorAll(".page").forEach(p=>p.classList.add("hidden"));
   document.getElementById("page-"+page).classList.remove("hidden");
@@ -47,8 +51,35 @@ async function gotoPage(page){
   document.getElementById("page-subtitle").textContent = PAGE_META[page].sub;
   try{
     await LOADERS[page]();
+    setLiveStatus("live", `Live · updated ${new Date().toLocaleTimeString()}`);
   }catch(e){
+    setLiveStatus("offline", "Connection issue · retrying");
     document.getElementById("page-"+page).innerHTML = `<div class="error-state">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function setLiveStatus(state, label){
+  const status = document.getElementById("live-status");
+  status.className = `live-status ${state}`;
+  document.getElementById("live-status-text").textContent = label;
+}
+
+async function refreshActivePage(){
+  const refresh = LIVE_REFRESHERS[activePage];
+  const modalOpen = !document.getElementById("modal-backdrop").classList.contains("hidden");
+  const progressOpen = !document.getElementById("progress-overlay").classList.contains("hidden");
+  const editing = document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if(document.hidden || liveRefreshInProgress || modalOpen || progressOpen || editing || !refresh) return;
+
+  liveRefreshInProgress = true;
+  setLiveStatus("updating", "Updating live data");
+  try{
+    await refresh();
+    setLiveStatus("live", `Live · updated ${new Date().toLocaleTimeString()}`);
+  }catch(e){
+    setLiveStatus("offline", "Connection issue · retrying");
+  }finally{
+    liveRefreshInProgress = false;
   }
 }
 
@@ -105,10 +136,88 @@ function card(label, value, sub, cls){
     <div class="value">${value}</div><div class="sub">${sub||""}</div></div>`;
 }
 
+function drawFallbackChart(id, type, labels, values, colors){
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width || 340;
+  const h = canvas.height || 200;
+  ctx.clearRect(0, 0, w, h);
+
+  if (type === 'doughnut') {
+    const total = values.reduce((sum, v) => sum + Math.max(0, Number(v) || 0), 0) || 1;
+    let start = -Math.PI / 2;
+    values.forEach((v, idx) => {
+      const slice = (Math.max(0, Number(v) || 0) / total) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, h / 2);
+      ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.28, start, start + slice);
+      ctx.closePath();
+      ctx.fillStyle = Array.isArray(colors) ? colors[idx] : colors;
+      ctx.fill();
+      start += slice;
+    });
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, Math.min(w, h) * 0.14, 0, Math.PI * 2);
+    ctx.fillStyle = '#0b1220';
+    ctx.fill();
+    return;
+  }
+
+  if (type === 'bar') {
+    const max = Math.max(...values, 1);
+    const barCount = values.length;
+    const gap = 12;
+    const barWidth = (w - 40 - (barCount - 1) * gap) / barCount;
+    values.forEach((v, idx) => {
+      const barHeight = (v / max) * (h - 30);
+      const x = 20 + idx * (barWidth + gap);
+      const y = h - 10 - barHeight;
+      ctx.fillStyle = Array.isArray(colors) ? colors[idx] : colors;
+      ctx.fillRect(x, y, barWidth, barHeight);
+      ctx.fillStyle = '#93a2c0';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[idx] || '', x + barWidth / 2, h - 2);
+    });
+    return;
+  }
+
+  if (type === 'line') {
+    const max = Math.max(...values, 1);
+    const min = Math.min(...values, 0);
+    const points = values.map((v, idx) => {
+      const x = 20 + (idx * (w - 40)) / Math.max(1, values.length - 1);
+      const y = h - 20 - ((v - min) / Math.max(1, max - min || 1)) * (h - 40);
+      return { x, y, v };
+    });
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.strokeStyle = Array.isArray(colors) ? colors[0] : colors;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    points.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = Array.isArray(colors) ? colors[0] : colors;
+      ctx.fill();
+    });
+  }
+}
+
 function renderChart(id, type, labels, data, color){
   const ctx = document.getElementById(id);
   if(!ctx) return;
   if(charts[id]) charts[id].destroy();
+  if (typeof Chart === 'undefined') {
+    const values = Array.isArray(data) ? data : [data];
+    const colors = Array.isArray(color) ? color : [color];
+    ctx.width = 340;
+    ctx.height = 200;
+    drawFallbackChart(id, type, labels, values, colors);
+    return;
+  }
   const isArray = Array.isArray(color);
   charts[id] = new Chart(ctx, {
     type, data:{labels, datasets:[{data, backgroundColor: isArray?color:color, borderRadius: type==='bar'?6:0,
@@ -375,32 +484,57 @@ async function loadAssistant(){
         <div class="chat-msg ai">Ask me anything about the current reconciliation dataset — I answer only from real numbers in the database.</div>
       </div>
       <div class="chat-input">
-        <input type="text" id="chat-input" placeholder="Ask a finance question…">
-        <button class="btn btn-primary" id="chat-send">Send</button>
+        <input type="text" id="chat-input" placeholder="Type a finance question…">
+        <button class="btn btn-primary" id="chat-send">Ask</button>
       </div>
     </div>`;
-  document.getElementById("chat-send").addEventListener("click", ()=>{
-    const v = document.getElementById("chat-input").value.trim();
+  const sendBtn = document.getElementById("chat-send");
+  const input = document.getElementById("chat-input");
+  sendBtn.addEventListener("click", ()=>{
+    const v = input.value.trim();
     if(v) askAI(v);
   });
-  document.getElementById("chat-input").addEventListener("keydown", e=>{
+  input.addEventListener("keydown", e=>{
     if(e.key==="Enter"){ const v = e.target.value.trim(); if(v) askAI(v); }
   });
 }
 
 async function askAI(question){
   const log = document.getElementById("chat-log");
-  log.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${question}</div>`);
-  document.getElementById("chat-input").value = "";
+  const input = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("chat-send");
+  if(!question || !question.trim()) return;
+
+  const cleanQuestion = String(question).trim();
+  log.insertAdjacentHTML("beforeend", `<div class="chat-msg user">${cleanQuestion}</div>`);
+  input.value = "";
+  input.disabled = true;
+  sendBtn.disabled = true;
+  sendBtn.textContent = "Working…";
+  const loader = document.createElement("div");
+  loader.className = "chat-msg ai";
+  loader.textContent = "Working on your question…";
+  loader.id = "chat-loading";
+  log.appendChild(loader);
   log.scrollTop = log.scrollHeight;
+
   try{
     const data = await api("/ai/query", {method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({question})});
+      body: JSON.stringify({question: cleanQuestion})});
+    const loading = document.getElementById("chat-loading");
+    if(loading) loading.remove();
     log.insertAdjacentHTML("beforeend", `<div class="chat-msg ai">${data.answer}</div>`);
   }catch(e){
-    log.insertAdjacentHTML("beforeend", `<div class="chat-msg ai">I couldn't process that: ${e.message}</div>`);
+    const loading = document.getElementById("chat-loading");
+    if(loading) loading.remove();
+    log.insertAdjacentHTML("beforeend", `<div class="chat-msg ai error-state">I couldn't answer that from the current dataset: ${e.message}</div>`);
+  } finally {
+    input.disabled = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = "Ask";
+    input.focus();
+    log.scrollTop = log.scrollHeight;
   }
-  log.scrollTop = log.scrollHeight;
 }
 window.askAI = askAI;
 
@@ -458,12 +592,26 @@ document.getElementById("modal-backdrop").addEventListener("click", e=>{
 });
 
 // ---------------------------------------------------------------- Demo controls
-document.getElementById("btn-refresh").addEventListener("click", ()=> gotoPage(currentPage()));
+document.getElementById("btn-refresh").addEventListener("click", refreshCurrentView);
 document.getElementById("btn-run").addEventListener("click", runReconciliation);
 document.getElementById("btn-reset").addEventListener("click", resetDemo);
 
 function currentPage(){
   return document.querySelector(".nav-item.active").dataset.page;
+}
+
+async function refreshCurrentView(){
+  const refresh = LIVE_REFRESHERS[activePage];
+  const editing = document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if(editing){
+    setLiveStatus("live", "Finish editing before refreshing");
+    return;
+  }
+  if(!refresh){
+    setLiveStatus("live", "This view has no refreshable data");
+    return;
+  }
+  await refreshActivePage();
 }
 
 async function runReconciliation(){
@@ -519,5 +667,18 @@ const LOADERS = {
   assistant: loadAssistant, audit: loadAudit, settings: loadSettings,
 };
 
+const LIVE_REFRESHERS = {
+  dashboard: loadDashboard,
+  reconciliation: fetchReconTable,
+  exceptions: fetchExceptionsTable,
+  settlements: loadSettlements,
+  cash: loadCash,
+  forecast: loadForecast,
+  merchants: loadMerchants,
+  audit: loadAudit,
+  settings: loadSettings,
+};
+
 // ---------------------------------------------------------------- Init
 gotoPage("dashboard");
+window.setInterval(refreshActivePage, LIVE_REFRESH_MS);

@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FinRecon AI — Autonomous Reconciliation &amp; Cash Intelligence</title>
 <link rel="stylesheet" href="/style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -42,7 +41,10 @@
         <p id="page-subtitle" class="muted">Autonomous reconciliation and cash intelligence for payment operations.</p>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-ghost" id="btn-refresh">Refresh Dashboard</button>
+        <div id="live-status" class="live-status" role="status" aria-live="polite">
+          <span class="live-dot"></span><span id="live-status-text">Connecting</span>
+        </div>
+        <button class="btn btn-ghost" id="btn-refresh">Refresh Current View</button>
         <button class="btn btn-primary" id="btn-run">Run Reconciliation</button>
         <button class="btn btn-danger" id="btn-reset">Reset Demo</button>
       </div>
