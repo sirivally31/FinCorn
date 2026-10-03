@@ -266,6 +266,12 @@ Health check: **http://localhost:8080/api/health**
 The database auto-seeds and auto-reconciles on first run — the dashboard
 is populated immediately, no manual steps needed.
 
+### Deploy on Render
+
+The repository includes `render.yaml` for a free Render web service. In Render, choose **New + → Blueprint**, connect `sirivally31/FinCorn`, and deploy the `main` branch. Render installs the backend requirements, starts the app with Gunicorn, and checks `/api/health`.
+
+This demo uses SQLite on Render's temporary filesystem. Synthetic data is recreated on startup, but exception decisions and other changes may be lost when the service restarts or redeploys. Do not use this configuration for real financial data. See [PROJECT_GUIDE.md](PROJECT_GUIDE.md) for deployment limitations and production requirements.
+
 ### Automated quality check
 ```bash
 ./verify.sh

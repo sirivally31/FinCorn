@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")/backend"
 
 echo "1) Checking Python syntax..."
-python3 -m py_compile app.py database.py seed.py reconciliation.py cash.py ai_provider.py
+python3 -m py_compile app.py wsgi.py database.py seed.py reconciliation.py cash.py ai_provider.py
 echo "   OK"
 
 echo "2) Running unit tests..."

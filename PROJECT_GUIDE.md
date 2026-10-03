@@ -34,6 +34,12 @@ python app.py
 
 The first run creates `data/finrecon.db`. That file holds local demo state, so exception actions such as Resolve and Escalate remain recorded across restarts. Use **Reset Demo** to regenerate the standard synthetic dataset.
 
+## Deploy on Render
+
+The repository includes a Render Blueprint in `render.yaml`. To deploy, open the Render dashboard, create a new **Blueprint** from `sirivally31/FinCorn`, and select the `main` branch. Render installs `backend/requirements.txt`, starts the app with Gunicorn, and checks `/api/health`.
+
+The included service uses Render's free plan and SQLite on its temporary filesystem. The app seeds synthetic records on startup, but manual exception decisions and other database changes can be lost when the free service restarts or redeploys. This setup is for a public demo, not production financial records. Persistent storage requires a paid Render service with a disk, or a production database and corresponding application configuration. Keep any optional AI credentials in Render's environment settings, never in `render.yaml` or Git.
+
 ## A normal walkthrough
 
 1. Open the dashboard and review the reconciliation, cash, and exception totals.

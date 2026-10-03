@@ -8,6 +8,10 @@
 /data/*.sqlite
 /data/*.sqlite3
 
+# Optional local video toolchain (large third-party FFmpeg distribution)
+/finrecon_video_assets/ffmpeg/
+/finrecon_video_assets/ffmpeg.zip
+
 # Python caches
 __pycache__/
 *.pyc

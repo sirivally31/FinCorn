@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: finrecon-ai
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn --workers 1 --chdir backend wsgi:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: AI_PROVIDER
+        value: mock
