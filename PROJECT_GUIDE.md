@@ -1,6 +1,6 @@
 # FinRecon AI: A Practical Project Guide
 
-FinRecon AI helps a finance team see where payment, settlement, and ledger records agree, and where a person should take a closer look. It is a working local demo, not a connection to a real bank account.
+FinRecon AI compares payment, settlement, and ledger records and highlights discrepancies for review. It does not initiate or move money. It can work with operator-provided CSV exports; it is not a live bank feed.
 
 ## What happens when it runs
 
@@ -8,7 +8,7 @@ The app is one small Flask service. It serves the web dashboard and its API, whi
 
 The reconciliation rules compare payment, settlement, and ledger amounts and references. Small differences may be auto-resolved within configured tolerances; larger or ambiguous differences remain visible as exceptions. The AI provider can explain those findings, but it does not decide whether two financial records match.
 
-The dashboard checks the currently open data view every 10 seconds. **Refresh Current View** requests that view again immediately. This is polling the app's local database, not a live feed from a bank or payment gateway. Connecting real transaction sources would require provider credentials, a secure ingestion service, and real-data testing.
+The dashboard checks the currently open data view every 10 seconds. **Refresh Current View** reloads the selected view from the active database. **Run Reconciliation** recomputes matches from the currently stored records; it does not delete or recreate source records. **Import CSV Data** replaces the active dataset after validating payment, settlement, and ledger CSV files.
 
 ## Start the app
 
@@ -32,20 +32,20 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-The first run creates `data/finrecon.db`. That file holds local demo state, so exception actions such as Resolve and Escalate remain recorded across restarts. Use **Reset Demo** to regenerate the standard synthetic dataset.
+The first run creates `data/finrecon.db` and seeds synthetic data for evaluation. CSV imports are disabled by default. Before importing financial records, set `APP_USERNAME`, `APP_PASSWORD`, `FINRECON_ALLOW_IMPORT=true`, and `FINRECON_DB_PATH` to a persistent database file. Configuring both credentials enables HTTP Basic Auth for the dashboard and API. `OPENING_CASH` configures the opening balance and defaults to zero.
 
 ## Deploy on Render
 
 The repository includes a Render Blueprint in `render.yaml`. To deploy, open the Render dashboard, create a new **Blueprint** from `sirivally31/FinCorn`, and select the `main` branch. Render installs `backend/requirements.txt`, starts the app with Gunicorn, and checks `/api/health`.
 
-The included service uses Render's free plan and SQLite on its temporary filesystem. The app seeds synthetic records on startup, but manual exception decisions and other database changes can be lost when the free service restarts or redeploys. This setup is for a public demo, not production financial records. Persistent storage requires a paid Render service with a disk, or a production database and corresponding application configuration. Keep any optional AI credentials in Render's environment settings, never in `render.yaml` or Git.
+The included service uses Render's free plan and SQLite on its temporary filesystem. It is only suitable for synthetic/public demo data. Do not enable imports or upload private financial records there: records can be lost on restart, and data must not be exposed publicly. To enable imports, use a private service with authentication configured and persistent storage (a paid Render disk mounted at `/var/data`, setting `FINRECON_DB_PATH=/var/data/finrecon.db`, or a production database adapter). Set `APP_USERNAME`, `APP_PASSWORD`, and `FINRECON_ALLOW_IMPORT=true` in Render's environment settings. Keep credentials out of Git and `render.yaml`.
 
 ## A normal walkthrough
 
 1. Open the dashboard and review the reconciliation, cash, and exception totals.
 2. Open **Reconciliation** to filter records and inspect the payment, settlement, and ledger details behind a result.
 3. Open **Exceptions** to read the explanation and recommended action. Resolve, escalate, ignore, and expected-status actions are written to the audit log.
-4. Review **Cash Position** and **Forecast** for the demo's cash calculation and its transparent moving-average projection.
+4. Review **Cash Position** and **Forecast** for the configured opening cash balance and transparent moving-average projection.
 5. Use **AI Finance Assistant** to ask questions about the current dataset. The default mock provider works offline; the optional OpenAI provider requires server-side configuration.
 
 ## Main pieces
@@ -68,7 +68,7 @@ cd backend
 python -m unittest tests.test_reconciliation -v
 ```
 
-The API health endpoint is `http://localhost:8080/api/health`. Other useful endpoints include `/api/dashboard/summary`, `/api/reconciliations`, `/api/exceptions`, `/api/cash-position`, and `/api/cash-forecast`.
+The API health endpoint is `http://localhost:8080/api/health`. Other useful endpoints include `/api/dashboard/summary`, `/api/reconciliations`, `/api/exceptions`, `/api/cash-position`, and `/api/cash-forecast`. CSV import posts `payments`, `settlements`, and `ledger` CSV files to `/api/import`; it is disabled unless explicitly enabled with authentication and persistent storage configured.
 
 ## Before using real financial data
 

@@ -7,7 +7,10 @@ look like (see README for the Postgres DDL translation notes).
 import sqlite3
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "finrecon.db")
+DB_PATH = os.environ.get(
+    "FINRECON_DB_PATH",
+    os.path.join(os.path.dirname(__file__), "..", "data", "finrecon.db"),
+)
 DB_PATH = os.path.abspath(DB_PATH)
 
 

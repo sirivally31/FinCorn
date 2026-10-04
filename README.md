@@ -73,23 +73,23 @@ These numbers come from a real, tested run of this exact codebase — see
 | Total settlement value | ₹18,96,495.00 |
 | Settlement gap | ₹1,10,900.00 |
 | Unresolved exception value | ₹1,82,002.50 |
-| Current cash position | ₹11,10,071.20 |
-| 7-day forecasted cash | ₹12,10,263.93 |
+| Current cash position (OPENING_CASH defaults to ₹0) | ₹1,10,071.20 |
+| 7-day forecasted cash | ₹2,10,263.93 |
 
-Re-running `POST /api/demo/reset` reproduces **exactly** these numbers,
-because the synthetic dataset and its injected exceptions are generated
+Re-running `POST /api/demo/reset` reproduces **exactly** these reconciliation
+and cash figures when `OPENING_CASH` is unset, because the synthetic dataset and its injected exceptions are generated
 with a fixed random seed and a fixed exception recipe (see
 `backend/seed.py`).
 
 ### How these numbers were produced
 
-This is not a claim taken on faith — it's the actual output of:
+These figures describe the synthetic evaluation dataset, not a live financial account. They are reproduced by:
 ```
-python3 -m unittest tests.test_reconciliation -v   # 20/20 tests pass
+cd backend
+python3 -m unittest discover -s tests -v   # 27/27 tests pass
 curl -X POST http://localhost:8080/api/demo/reset
 curl http://localhost:8080/api/dashboard/summary
 ```
-run against this codebase before it was packaged.
 
 ---
 
@@ -216,8 +216,8 @@ in the UI for the full suggested-question list.
 
 ## 9. Cash position & forecast
 
-See `backend/cash.py` for the fully documented, simplified demo
-accounting assumptions (opening cash constant, inflows = successful
+See `backend/cash.py` for the documented, simplified cash calculation
+(opening cash configured with `OPENING_CASH`, default zero; inflows = successful
 payments, outflows = settlements + fees + tax). The forecast uses a
 transparent moving-average model over 1/3/7-day horizons with confidence
 that decreases with horizon length — methodology is shown in the UI, not
@@ -237,12 +237,16 @@ FinRecon AI features a secure backend-only validation for Razorpay keys restrict
 - `AI_PROVIDER`: `mock` (default) or `openai`
 - `OPENAI_API_KEY`: Required only if `openai` provider is used.
 - `OPENAI_MODEL`: Model name (default `gpt-4o-mini`)
+- `OPENING_CASH`: Starting cash amount for position/forecast calculations (defaults to `0`).
+- `APP_USERNAME` and `APP_PASSWORD`: Enable HTTP Basic Auth for dashboard and API routes.
+- `FINRECON_ALLOW_IMPORT`: Set to `true` to explicitly enable CSV replacement imports.
+- `FINRECON_DB_PATH`: SQLite file path; imports require a persistent location.
 
 ## 13. Local setup
 
 ### Requirements
-- Python 3.9+ (Flask is the only pip dependency; everything else is
-  stdlib)
+- Python 3.9+ (Flask and Gunicorn are the pip dependencies; everything else
+  is stdlib)
 - A modern browser with JavaScript enabled
 
 ### Start (Linux/Mac)
@@ -263,8 +267,10 @@ Then open **http://localhost:8080**
 
 Health check: **http://localhost:8080/api/health**
 
-The database auto-seeds and auto-reconciles on first run — the dashboard
-is populated immediately, no manual steps needed.
+The database auto-seeds synthetic records and reconciles them on first run.
+To use operator data, configure authentication and persistent storage, then
+use **Import CSV Data** to load payment, settlement, and ledger exports.
+The import replaces the active dataset after validating the three files.
 
 ### Deploy on Render
 
@@ -280,11 +286,11 @@ Compiles every backend module, runs the full test suite, checks frontend
 JS syntax, boots the server, and hits every core endpoint.
 
 ## 14. Demo instructions
-To reset the demo to its ground-truth standard state, click **"Reset Demo"** in the UI, or:
-Click **"Reset Demo"** in the UI, or:
+To reset a local synthetic dataset to its ground-truth standard state:
 ```bash
 curl -X POST http://localhost:8080/api/demo/reset
 ```
+The dashboard no longer exposes a destructive demo reset button. **Refresh Current View** reloads the active database view, while **Run Reconciliation** recomputes results without deleting source records.
 
 ---
 
@@ -292,9 +298,10 @@ curl -X POST http://localhost:8080/api/demo/reset
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/health` | Health + seed status |
+| GET | `/api/health` | Health + loaded payment count |
 | GET | `/api/dashboard/summary` | All headline metrics |
-| POST | `/api/reconciliation/run` | Re-seed + re-run the full pipeline (Demo Mode) |
+| POST | `/api/reconciliation/run` | Re-run reconciliation against currently stored source records |
+| POST | `/api/import` | Replace dataset from payment, settlement, and ledger CSV files (requires auth, explicit opt-in, and persistent DB path) |
 | GET | `/api/reconciliations` | List, filterable by `status`, `exceptionType`, `merchantId`, `search` |
 | GET | `/api/reconciliations/{id}` | Full detail incl. payment/settlement/ledger/exceptions |
 | GET | `/api/exceptions` | List, filterable by `status`, `severity` |
@@ -330,7 +337,7 @@ processed, match rate in [0,100], unresolved exceptions exist, metrics
 computed from the database rather than hardcoded).
 
 ```
-Ran 20 tests in 0.024s
+Ran 27 tests
 OK
 ```
 
@@ -342,9 +349,12 @@ OK
   network access; porting notes are provided.
 - **SQLite, not PostgreSQL** — fine for a single-process demo; a real
   deployment should use the Postgres schema translation notes above.
-- **No authentication is enforced** — demo credentials are shown in
-  Settings but not checked against any login flow, per the brief's
-  request not to over-engineer auth for the demo.
+- **Authentication is opt-in** — set both `APP_USERNAME` and
+  `APP_PASSWORD` to protect dashboard/API routes. CSV imports also require
+  `FINRECON_ALLOW_IMPORT=true` and a persistent `FINRECON_DB_PATH`.
+- **Free Render storage is ephemeral** — do not enable imports or upload
+  confidential records to the public free demo. Use persistent storage and
+  access controls before handling real financial data.
 - **Cash position model is intentionally simplified** — clearly labelled
   as such in the UI and in `cash.py`; not GAAP-complete accounting.
 - **OpenAI provider is untested against a live API key** in this
@@ -360,7 +370,8 @@ OK
 - Razorpay and OpenAI integrations operate 100% backend-side.
 - No keys are exposed in the frontend or REST API payloads.
 - Test mode is strictly enforced for real keys.
-- No database credentials exist (SQLite runs locally mode).
+- CSV import is disabled unless the operator explicitly configures
+  credentials, opt-in, and a persistent database path.
 
 ## Future improvements
 

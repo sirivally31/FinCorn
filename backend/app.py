@@ -3,14 +3,19 @@ FinRecon AI - Backend entrypoint.
 Serves both the REST API and the static frontend on a single port so the
 whole app starts with one command: `python3 app.py`.
 """
+import csv
+import hmac
+import io
+import math
 import os
+import sqlite3
 import datetime
 import base64
 import urllib.request
 import urllib.error
 from flask import Flask, jsonify, redirect, request, send_from_directory
 
-from database import init_db, wipe_data, get_connection
+from database import init_db, get_connection
 import seed
 import reconciliation
 import cash
@@ -19,7 +24,41 @@ from ai_provider import get_provider
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
 app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 AI = get_provider()
+
+CSV_SOURCES = {
+    "payments": {
+        "table": "payments",
+        "columns": ("transaction_id", "payment_id", "merchant_id", "customer_id", "upi_id",
+                    "amount", "currency", "payment_method", "status", "transaction_timestamp",
+                    "settlement_date", "gateway_reference", "bank_reference", "fee", "tax",
+                    "net_amount"),
+        "required": ("transaction_id", "payment_id", "amount", "fee", "tax", "status",
+                     "transaction_timestamp", "bank_reference"),
+        "numbers": ("amount", "fee", "tax", "net_amount"),
+        "key": "transaction_id",
+    },
+    "settlements": {
+        "table": "settlements",
+        "columns": ("settlement_id", "transaction_id", "merchant_id", "settlement_reference",
+                    "gross_amount", "fee", "tax", "net_amount", "settlement_date",
+                    "settlement_status", "bank_reference"),
+        "required": ("settlement_id", "transaction_id", "gross_amount", "fee", "tax",
+                     "net_amount", "settlement_date", "settlement_status", "bank_reference"),
+        "numbers": ("gross_amount", "fee", "tax", "net_amount"),
+        "key": "settlement_id",
+    },
+    "ledger": {
+        "table": "ledger_entries",
+        "columns": ("ledger_id", "transaction_id", "merchant_id", "debit", "credit",
+                    "ledger_amount", "tax_amount", "fee_amount", "entry_date",
+                    "ledger_status", "reference"),
+        "required": ("ledger_id", "transaction_id", "ledger_amount"),
+        "numbers": ("debit", "credit", "ledger_amount", "tax_amount", "fee_amount"),
+        "key": "ledger_id",
+    },
+}
 
 
 def error_response(status, message):
@@ -30,6 +69,97 @@ def error_response(status, message):
         "message": message,
         "path": request.path,
     }), status
+
+
+@app.before_request
+def protect_financial_data():
+    if request.path == "/api/health":
+        return None
+
+    username = os.environ.get("APP_USERNAME")
+    password = os.environ.get("APP_PASSWORD")
+    if bool(username) != bool(password):
+        return error_response(503, "Configure both APP_USERNAME and APP_PASSWORD, or remove both.")
+    if not username or not password:
+        if request.path == "/api/import":
+            return error_response(503, "CSV import requires authentication and persistent storage configuration.")
+        return None
+
+    credentials = request.authorization
+    if credentials and hmac.compare_digest(credentials.username or "", username) \
+            and hmac.compare_digest(credentials.password or "", password):
+        return None
+
+    response, status = error_response(401, "Authentication required")
+    response.headers["WWW-Authenticate"] = 'Basic realm="FinRecon AI"'
+    return response, status
+
+
+def _read_csv_upload(upload, source):
+    config = CSV_SOURCES[source]
+    try:
+        content = upload.stream.read().decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{source}: file must be UTF-8 encoded") from exc
+
+    reader = csv.DictReader(io.StringIO(content))
+    if not reader.fieldnames:
+        raise ValueError(f"{source}: CSV needs a header row")
+    headers = [header.strip().lower().replace(" ", "_") for header in reader.fieldnames]
+    if len(headers) != len(set(headers)):
+        raise ValueError(f"{source}: duplicate column names are not allowed")
+    missing = sorted(set(config["required"]) - set(headers))
+    if missing:
+        raise ValueError(f"{source}: missing required columns: {', '.join(missing)}")
+
+    rows = []
+    seen_keys = set()
+    for row_number, values in enumerate(reader, start=2):
+        row = {headers[index]: (value.strip() if value else None)
+               for index, value in enumerate(values.values()) if index < len(headers)}
+        if not any(row.values()):
+            continue
+
+        for column in config["required"]:
+            if not row.get(column):
+                raise ValueError(f"{source}: row {row_number} is missing {column}")
+        for column in config["numbers"]:
+            value = row.get(column)
+            if value is None:
+                row[column] = None
+                continue
+            try:
+                parsed = float(value)
+            except ValueError as exc:
+                raise ValueError(f"{source}: row {row_number} has invalid {column}") from exc
+            if not math.isfinite(parsed):
+                raise ValueError(f"{source}: row {row_number} has invalid {column}")
+            row[column] = parsed
+
+        for column in ("transaction_timestamp", "settlement_date", "entry_date"):
+            value = row.get(column)
+            if value:
+                try:
+                    datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError as exc:
+                    raise ValueError(f"{source}: row {row_number} has invalid {column}; use ISO 8601") from exc
+
+        key = row[config["key"]]
+        if key in seen_keys:
+            raise ValueError(f"{source}: duplicate {config['key']} {key} in CSV")
+        seen_keys.add(key)
+        if source == "payments":
+            row.setdefault("currency", "INR")
+            row.setdefault("payment_method", "UNKNOWN")
+        if source == "settlements":
+            row["settlement_status"] = row["settlement_status"].upper()
+        if source == "payments":
+            row["status"] = row["status"].upper()
+        rows.append(tuple(row.get(column) for column in config["columns"]))
+
+    if source == "payments" and not rows:
+        raise ValueError("payments: include at least one payment record")
+    return rows
 
 
 @app.errorhandler(404)
@@ -92,7 +222,7 @@ def health():
     conn = get_connection()
     n = conn.execute("SELECT COUNT(*) c FROM payments").fetchone()["c"]
     conn.close()
-    return jsonify({"status": "UP", "recordsSeeded": n,
+    return jsonify({"status": "UP", "recordsLoaded": n, "recordsSeeded": n,
                      "aiProvider": os.environ.get("AI_PROVIDER", "mock"),
                      "razorpayStatus": _check_razorpay(),
                      "time": datetime.datetime.now(datetime.timezone.utc).isoformat()})
@@ -115,13 +245,13 @@ def dashboard_summary():
 def run_reconciliation():
     steps = []
     init_db(reset=False)
-    steps.append("Database ready")
-    wipe_data()
-    steps.append("Previous demo data cleared")
-    n = seed.generate_and_load()
-    steps.append(f"{n} payments loaded")
-    steps.append("Settlements loaded")
-    steps.append("Ledger loaded")
+    conn = get_connection()
+    n = conn.execute("SELECT COUNT(*) FROM payments").fetchone()[0]
+    conn.close()
+    if not n:
+        return error_response(400, "No payment records are loaded. Import CSV data before reconciling.")
+    steps.append(f"{n} existing payments found")
+    steps.append("Existing settlements and ledger records retained")
     summary = reconciliation.run_reconciliation(ai_provider=AI)
     steps.append("Records matched")
     steps.append("Exceptions classified")
@@ -131,6 +261,62 @@ def run_reconciliation():
     fc = cash.compute_forecast()
     steps.append("Forecast generated")
     return jsonify({"steps": steps, "summary": summary, "cashPosition": cp, "forecast": fc})
+
+
+@app.route("/api/import", methods=["POST"])
+def import_records():
+    if os.environ.get("FINRECON_ALLOW_IMPORT", "").lower() != "true":
+        return error_response(503, "Set FINRECON_ALLOW_IMPORT=true to explicitly enable CSV imports.")
+    if not os.environ.get("FINRECON_DB_PATH"):
+        return error_response(503, "Set FINRECON_DB_PATH to a persistent database location before importing.")
+
+    try:
+        imported = {}
+        for source in CSV_SOURCES:
+            upload = request.files.get(source)
+            if upload is None or not upload.filename:
+                raise ValueError(f"Select a {source} CSV file")
+            imported[source] = _read_csv_upload(upload, source)
+    except ValueError as exc:
+        return error_response(400, str(exc))
+
+    init_db(reset=False)
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        for table in ("reconciliations", "exceptions", "audit_logs", "cash_snapshots",
+                      "forecast_records", "settlements", "ledger_entries", "payments", "merchants"):
+            conn.execute(f"DELETE FROM {table}")
+
+        for source, rows in imported.items():
+            config = CSV_SOURCES[source]
+            columns = config["columns"]
+            placeholders = ",".join("?" for _ in columns)
+            conn.executemany(
+                f"INSERT INTO {config['table']} ({','.join(columns)}) VALUES ({placeholders})",
+                rows,
+            )
+
+        merchant_ids = sorted({row[2] for row in imported["payments"] if row[2]})
+        conn.executemany(
+            "INSERT INTO merchants (merchant_id, name, category) VALUES (?, ?, ?)",
+            [(merchant_id, merchant_id, "Imported") for merchant_id in merchant_ids],
+        )
+        conn.commit()
+    except (sqlite3.Error, ValueError) as exc:
+        conn.rollback()
+        conn.close()
+        return error_response(400, f"Import rejected; existing records were preserved: {exc}")
+    conn.close()
+
+    summary = reconciliation.run_reconciliation(ai_provider=AI)
+    forecast = cash.compute_forecast()
+    return jsonify({
+        "message": "Imported records and completed reconciliation.",
+        "counts": {source: len(rows) for source, rows in imported.items()},
+        "summary": summary,
+        "forecast": forecast,
+    }), 201
 
 
 @app.route("/api/reconciliations")
@@ -398,6 +584,8 @@ def ai_query():
 # ---------------------------------------------------------------- Demo controls
 @app.route("/api/demo/reset", methods=["POST"])
 def demo_reset():
+    if os.environ.get("FINRECON_ALLOW_IMPORT", "").lower() == "true":
+        return error_response(410, "Demo reset is disabled while CSV imports are enabled.")
     init_db(reset=True)
     n = seed.generate_and_load()
     summary = reconciliation.run_reconciliation(ai_provider=AI)

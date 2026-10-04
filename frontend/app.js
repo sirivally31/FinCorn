@@ -408,7 +408,7 @@ async function loadCash(){
   el.innerHTML = `
     <div class="grid-cards">
       ${card("Current Cash Position", fmtINR(cp.currentCashPosition), "Opening + inflows − outflows", "accent-green")}
-      ${card("Opening Cash", fmtINR(cp.openingCash), "Fixed demo constant")}
+      ${card("Opening Cash", fmtINR(cp.openingCash), "Configured with OPENING_CASH")}
       ${card("Total Payment Inflow", fmtINR(cp.totalPaymentInflow), "Successful customer payments")}
       ${card("Pending Settlement", fmtINR(cp.pendingSettlementAmount), "Collected, not yet paid out", "accent-amber")}
       ${card("Fees", fmtINR(cp.fees), "Gateway processing fees")}
@@ -416,7 +416,7 @@ async function loadCash(){
       ${card("Refunds", fmtINR(cp.refunds), "Reversed payments")}
       ${card("Net Position Change", fmtINR(cp.netPosition), "Vs. opening balance")}
     </div>
-    <div class="panel"><h3>Simplified Demo Accounting Assumptions</h3>
+    <div class="panel"><h3>Cash Calculation Assumptions</h3>
       <p style="font-size:13px;color:var(--muted)">${cp.assumptions}</p></div>
   `;
 }
@@ -440,7 +440,7 @@ async function loadForecast(){
     <div class="panel"><h3>Methodology</h3>
       <p style="font-size:13px;color:var(--muted)">${data.forecast[0] ? data.forecast[0].methodology : ""}
       This is a transparent moving-average model, not a black-box prediction — every number can be traced
-      back to actual synthetic transaction history.</p></div>
+      back to imported transaction history.</p></div>
   `;
   renderChart("chart-forecast", "line",
     data.forecast.map(f=>f.horizonDays + "d"), data.forecast.map(f=>f.projectedBalance), "#5b8def");
@@ -560,21 +560,16 @@ async function loadSettings(){
   el.innerHTML = `<div class="panel"><h3>System Status</h3>
     <div class="kv">
       <div>Status</div><div><span class="badge badge-MATCHED">${health.status}</span></div>
-      <div>Records Seeded</div><div>${fmtNum(health.recordsSeeded)}</div>
+      <div>Records Loaded</div><div>${fmtNum(health.recordsLoaded ?? health.recordsSeeded)}</div>
       <div>AI Provider</div><div>${health.aiProvider}</div>
       <div>Server Time</div><div>${fmtDate(health.time)}</div>
     </div></div>
     <div class="panel"><h3>Razorpay Integration</h3>
-      <p class="muted" style="margin-bottom:10px">${health.razorpayStatus === "Not Configured" ? "Razorpay Test Mode not configured — running synthetic evaluation mode." : "Razorpay Test Mode configured."}</p>
+      <p class="muted" style="margin-bottom:10px">${health.razorpayStatus === "Not Configured" ? "Optional Test Mode connectivity check is not configured. This app does not initiate payments." : "Razorpay Test Mode connectivity check is configured."}</p>
       <div class="kv"><div>Connection Status</div><div><span class="badge ${health.razorpayStatus.includes('Connected') ? 'badge-MATCHED' : 'badge-OPEN'}">${health.razorpayStatus}</span></div></div>
     </div>
-    <div class="panel"><h3>Demo Credentials</h3>
-      <div class="kv"><div>Email</div><div>admin@finrecon.ai</div><div>Password</div><div>Demo@123</div></div>
-      <p class="muted">Authentication is a demo placeholder only — not enforced in this build.</p></div>
     <div class="panel"><h3>Configuration</h3>
-      <p class="muted">AI_PROVIDER, OPENAI_API_KEY and OPENAI_MODEL are set via environment variables.
-      Without an API key, FinRecon AI uses a fully deterministic mock AI provider so the demo never breaks.
-      Razorpay integration is purely an optional test-mode connectivity check.</p></div>`;
+      <p class="muted">Set APP_USERNAME and APP_PASSWORD to protect the app, FINRECON_ALLOW_IMPORT=true to enable imports, FINRECON_DB_PATH to use persistent storage, and OPENING_CASH to configure the cash starting balance. AI_PROVIDER, OPENAI_API_KEY and OPENAI_MODEL are optional. Razorpay is only a test-mode connectivity check; this app does not move money.</p></div>`;
 }
 
 // ---------------------------------------------------------------- Modal
@@ -591,10 +586,10 @@ document.getElementById("modal-backdrop").addEventListener("click", e=>{
   if(e.target.id === "modal-backdrop") closeModal();
 });
 
-// ---------------------------------------------------------------- Demo controls
+// ---------------------------------------------------------------- Data controls
 document.getElementById("btn-refresh").addEventListener("click", refreshCurrentView);
 document.getElementById("btn-run").addEventListener("click", runReconciliation);
-document.getElementById("btn-reset").addEventListener("click", resetDemo);
+document.getElementById("btn-import").addEventListener("click", openImportModal);
 
 function currentPage(){
   return document.querySelector(".nav-item.active").dataset.page;
@@ -617,7 +612,7 @@ async function refreshCurrentView(){
 async function runReconciliation(){
   const overlay = document.getElementById("progress-overlay");
   const stepsEl = document.getElementById("progress-steps");
-  const PLANNED = ["Payments loaded","Settlements loaded","Ledger loaded","Records matched",
+  const PLANNED = ["Existing source records checked","Records matched",
     "Exceptions classified","AI analysis completed","Cash position calculated","Forecast generated"];
   stepsEl.innerHTML = PLANNED.map(s=>`<li>${s}</li>`).join("");
   overlay.classList.remove("hidden");
@@ -640,15 +635,41 @@ async function runReconciliation(){
   }
 }
 
-async function resetDemo(){
-  if(!confirm("This will regenerate synthetic data and re-run reconciliation. Continue?")) return;
+function openImportModal(){
+  showModal(`<button class="close-btn" onclick="closeModal()" aria-label="Close">×</button>
+    <h3>Import source records</h3>
+    <p class="muted">Choose one CSV export for each source. Import replaces the active dataset, then runs reconciliation.</p>
+    <p class="import-warning">Imports are disabled until the server has APP_USERNAME, APP_PASSWORD, FINRECON_ALLOW_IMPORT=true, and FINRECON_DB_PATH configured to persistent storage. The app does not move money. Do not upload confidential records to an unprotected or ephemeral deployment.</p>
+    <form id="import-form" class="import-form">
+      <label>Payments CSV<input type="file" name="payments" accept=".csv,text/csv" required></label>
+      <label>Settlements CSV<input type="file" name="settlements" accept=".csv,text/csv" required></label>
+      <label>Ledger CSV<input type="file" name="ledger" accept=".csv,text/csv" required></label>
+      <details><summary>Required CSV columns</summary>
+        <p><strong>Payments</strong>: transaction_id, payment_id, amount, fee, tax, status, transaction_timestamp, bank_reference. Optional: merchant_id, customer_id, upi_id, currency, payment_method, settlement_date, gateway_reference, net_amount.</p>
+        <p><strong>Settlements</strong>: settlement_id, transaction_id, gross_amount, fee, tax, net_amount, settlement_date, settlement_status, bank_reference. Optional: merchant_id, settlement_reference.</p>
+        <p><strong>Ledger</strong>: ledger_id, transaction_id, ledger_amount. Optional: merchant_id, debit, credit, tax_amount, fee_amount, entry_date, ledger_status, reference. Include headers even when a source has no rows.</p>
+      </details>
+      <button class="btn btn-primary" type="submit">Import and Reconcile</button>
+    </form>`);
+  document.getElementById("import-form").addEventListener("submit", submitImport);
+}
+
+async function submitImport(event){
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type=submit]");
+  button.disabled = true;
+  button.textContent = "Importing…";
   try{
-    const data = await api("/demo/reset", {method:"POST"});
-    showBanner(data.message);
+    const result = await api("/import", {method:"POST", body:new FormData(form)});
+    closeModal();
+    showBanner(`${result.message} ${result.counts.payments} payments, ${result.counts.settlements} settlements, ${result.counts.ledger} ledger entries.`);
+    await gotoPage("dashboard");
   }catch(e){
-    showBanner("Reset failed: " + e.message, true);
+    showBanner("Import failed: " + e.message, true);
+    button.disabled = false;
+    button.textContent = "Import and Reconcile";
   }
-  gotoPage(currentPage());
 }
 
 function showBanner(text, isError){

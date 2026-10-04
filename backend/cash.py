@@ -2,7 +2,7 @@
 FinRecon AI - Cash position and cash forecast engine.
 
 SIMPLIFIED DEMO ACCOUNTING ASSUMPTIONS (documented, not hidden):
-  - Opening cash balance is a fixed demo constant (OPENING_CASH).
+    - Opening cash balance is configured with OPENING_CASH (defaults to zero).
   - Inflows  = successful payment amounts collected from customers.
   - Outflows = settlement net amounts actually paid out to merchants,
                plus gateway fees and taxes remitted.
@@ -19,9 +19,10 @@ transaction history's date range, then projected forward. Confidence
 decreases with horizon length to reflect growing uncertainty.
 """
 import datetime
+import os
 from database import get_connection
 
-OPENING_CASH = 1_000_000.0  # INR, fixed demo constant
+OPENING_CASH = float(os.environ.get("OPENING_CASH", "0"))
 
 
 def compute_cash_position():
@@ -56,7 +57,7 @@ def compute_cash_position():
         "currentCashPosition": round(current_cash, 2),
         "netPosition": round(current_cash - OPENING_CASH, 2),
         "assumptions": (
-            "Opening cash is a fixed demo constant. Inflows are successful customer "
+            "Opening cash is configured by OPENING_CASH (zero if unset). Inflows are successful customer "
             "payments; outflows are merchant settlements plus fees and tax. This is a "
             "simplified operating-cash model for demo purposes, not full GAAP accounting."
         ),
@@ -105,7 +106,7 @@ def compute_forecast():
         forecast_date = (today + datetime.timedelta(days=horizon_days)).isoformat()
         methodology = (f"Moving average: avg daily inflow (Rs.{avg_daily_inflow:,.2f}) and "
                        f"avg daily settlement outflow (Rs.{avg_daily_outflow:,.2f}) from actual "
-                       f"synthetic transaction history, projected {horizon_days} day(s) forward.")
+                       f"transaction history, projected {horizon_days} day(s) forward.")
         cur.execute("""INSERT INTO forecast_records (forecast_date, horizon_days,
             expected_inflow, expected_outflow, projected_balance, confidence, methodology)
             VALUES (?,?,?,?,?,?,?)""",

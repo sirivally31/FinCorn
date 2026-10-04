@@ -91,6 +91,14 @@ select,input[type=text]{background:var(--panel-2);border:1px solid var(--border)
   padding:22px;max-width:640px;width:92%;max-height:82vh;overflow-y:auto;}
 .modal h3{margin-top:0;}
 .modal .close-btn{float:right;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;}
+.import-form{display:flex;flex-direction:column;gap:12px;margin-top:16px;}
+.import-form label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:12px;}
+.import-form input[type=file]{max-width:100%;padding:9px;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;color:var(--text);}
+.import-form details{padding:12px;background:var(--panel-2);border:1px solid var(--border);border-radius:7px;color:var(--muted);font-size:11px;line-height:1.55;}
+.import-form summary{color:var(--text);cursor:pointer;font-weight:600;}
+.import-form details p{margin:10px 0 0;}
+.import-warning{padding:10px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:7px;color:#fcd34d;font-size:12px;line-height:1.5;}
+.import-warning code{font-size:11px;}
 .kv{display:grid;grid-template-columns:170px 1fr;gap:6px 12px;font-size:13px;margin:12px 0;}
 .kv div:nth-child(odd){color:var(--muted);}
 
