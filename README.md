@@ -2,383 +2,104 @@
 
 **Autonomous reconciliation and cash intelligence for payment operations.**
 
-Built for the Razorpay Buildathon — **AI Finance Controller** track
-("Run the books and the cash position").
+FinRecon AI compares payment, settlement, and ledger records, identifies discrepancies, and gives finance teams a reviewable exception queue and cash outlook. It analyzes records; it does not initiate payments or move money.
 
-> This project uses synthetic data for demonstration purposes and does not
-> process real financial transactions.
+> The public deployment currently uses synthetic data. Do not upload private or customer financial data to the free Render instance.
 
----
+## Live Demo
 
-## 1. Problem
+- Landing page: [finrecon-ai-aya7.onrender.com](https://finrecon-ai-aya7.onrender.com)
+- Dashboard: [finrecon-ai-aya7.onrender.com/app](https://finrecon-ai-aya7.onrender.com/app)
+- Health: [finrecon-ai-aya7.onrender.com/api/health](https://finrecon-ai-aya7.onrender.com/api/health)
 
-Payment operations generate financial records in at least three places —
-the payment gateway, the bank/settlement file, and the merchant's ledger.
-These records routinely disagree: fees drift, settlements arrive late,
-amounts don't match, records go missing. Finance teams currently reconcile
-this by hand, in spreadsheets, transaction by transaction.
+Render's free instance can sleep when idle and uses ephemeral storage. Its SQLite data can be lost on restart or redeploy.
 
-## 2. Solution
+## How It Works
 
-## 3. Why AI Finance Controller
-The AI Finance Controller track asks to 'run the books and the cash position'. FinRecon AI directly addresses this by ensuring no payments are blindly marked as 'resolved' by LLMs. It focuses on closing the gap between raw unstructured payment trails and the actual cash ledger, generating the necessary insights for real finance operations.
+1. Load payment, settlement, and ledger records. The app seeds reproducible synthetic records on a fresh database; validated CSV replacement imports are also supported when explicitly configured.
+2. Run deterministic reconciliation using amount, fee, tax, date, reference, and status rules.
+3. Keep material or ambiguous discrepancies in a human-review queue. Only defined tolerance cases can be auto-resolved.
+4. Use grounded AI explanations to understand detected exceptions. AI does not decide matches or resolve records.
+5. Review the calculated cash position, moving-average forecast, and audited exception actions.
 
-## 5. Data flow
+**Refresh Current View** re-reads the active database view. **Run Reconciliation** recalculates results from stored source records without deleting or reseeding them. **Import CSV Data** replaces the active dataset after validating all three CSV files.
 
+## Technology
 
-FinRecon AI closes the loop automatically:
+- **Python 3, Flask:** REST API and static-file server.
+- **SQLite:** simple local persistence for the single-process demo.
+- **HTML, CSS, vanilla JavaScript:** dashboard and landing page without a frontend build step.
+- **Gunicorn:** production WSGI server used by Render.
+- **unittest:** deterministic reconciliation and import-workflow tests.
+- **Render:** deployment from the repository's `main` branch using `render.yaml`.
 
-```
-Payment Records
-      ↓
-Settlement Records
-      ↓
-Ledger Records
-      ↓
-Deterministic Reconciliation Engine   (pure business rules, no LLM)
-      ↓
-Exception Detection
-      ↓
-AI Investigation                       (explains, never decides matches)
-      ↓
-Safe Auto-Resolution                   (only within configured tolerance bands)
-      ↓
-Human Exception Queue                  (everything else, honestly reported)
-      ↓
-Cash Position
-      ↓
-Cash Forecast
+This lightweight stack keeps the demo easy to run and verify. SQLite and the free Render configuration are not the recommended foundation for private production financial records. See [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) for stack trade-offs, architecture, limitations, and interview-ready explanations.
+
+## Run Locally
+
+Requirements: Python 3.9+.
+
+Windows:
+
+```powershell
+.\start.bat
 ```
 
-The differentiator: **the system doesn't just generate AI summaries — it
-processes a batch and measures its own performance.**
+macOS/Linux:
 
-## 8. Evaluation methodology
-Evaluation evaluates match rate, accuracy, and processing throughput using identical deterministic seeded synthetic constraints. The ground-truth exception list allows us to objectively categorize each AI explanation and verify zero false-positive resolutions.
-
-## 9. Exact measured results from the latest run
-
-These numbers come from a real, tested run of this exact codebase — see
-"How these numbers were produced" below.
-
-| Metric | Value |
-|---|---|
-| Records processed | **152** (150 seeded transactions + 1 injected duplicate + 1 orphan settlement) |
-| Matched | 123 |
-| Auto-resolved | 8 |
-| Unresolved exceptions | 21 |
-| Match rate | **86.18%** |
-| Auto-resolution rate | 5.26% |
-| Total payment value | ₹20,07,395.00 |
-| Total settlement value | ₹18,96,495.00 |
-| Settlement gap | ₹1,10,900.00 |
-| Unresolved exception value | ₹1,82,002.50 |
-| Current cash position (OPENING_CASH defaults to ₹0) | ₹1,10,071.20 |
-| 7-day forecasted cash | ₹2,10,263.93 |
-
-Re-running `POST /api/demo/reset` reproduces **exactly** these reconciliation
-and cash figures when `OPENING_CASH` is unset, because the synthetic dataset and its injected exceptions are generated
-with a fixed random seed and a fixed exception recipe (see
-`backend/seed.py`).
-
-### How these numbers were produced
-
-These figures describe the synthetic evaluation dataset, not a live financial account. They are reproduced by:
-```
-cd backend
-python3 -m unittest discover -s tests -v   # 27/27 tests pass
-curl -X POST http://localhost:8080/api/demo/reset
-curl http://localhost:8080/api/dashboard/summary
-```
-
----
-
-## 4. Architecture
-
-**Deliberately dependency-light** so it starts with one command and no
-Docker/Maven/npm install is required:
-
-- **Backend:** Python 3 + Flask (the only external dependency) + SQLite.
-  Clean modules: `database.py` (schema), `seed.py` (synthetic data),
-  `reconciliation.py` (deterministic engine — **zero LLM calls**),
-  `cash.py` (cash position + forecast), `ai_provider.py` (AI abstraction),
-  `app.py` (REST API + static file serving).
-- **Frontend:** a single-page vanilla JS/HTML/CSS dashboard (no build step,
-  no bundler), served by the same Flask process on the same port with an
-  offline-safe canvas fallback for charts.
-- **Database:** SQLite file at `data/finrecon.db`. Schema mirrors what a
-  PostgreSQL production schema would look like (see "Production notes"
-  below for the translation).
-
-This means: **`python3 app.py` starts the entire product — API and UI —
-on `http://localhost:8080`.** No separate frontend server, no database
-server to install, no network access required at runtime.
-
-### Why not the originally-specified Java/Spring/React/Postgres/Docker stack?
-
-That stack is exactly what a production version of this should be built
-in (see "Production notes"), and the code here is organized so the port
-is straightforward — controllers ↔ Flask routes, services ↔
-`reconciliation.py`/`cash.py`, entities ↔ the SQLite schema, repository
-methods ↔ the SQL in `database.py`. But the environment this project was
-generated in has **no network access** (no Maven Central, no npm
-registry, no Docker registry), so Spring Boot, React tooling, and
-PostgreSQL/Docker images could not actually be downloaded, compiled, or
-tested there. Rather than hand over hundreds of files that were never
-compiled or run, this build uses only what could be installed and
-executed **and verified** in that environment: Flask (already present
-locally) and stdlib SQLite. Every number and endpoint in this README was
-produced by actually running this code.
-
-## 17. Production architecture
-
-| This demo | Production equivalent |
-|---|---|
-| `database.py` SQLite schema | Flyway migration → same tables in PostgreSQL, add proper FKs |
-| `seed.py` | A `DataSeeder`/`CommandLineRunner` bean, or a separate seeding service |
-| `reconciliation.py` | `ReconciliationService` + `ReconciliationEngine` (pure Java, unit-testable) |
-| `cash.py` | `CashPositionService` / `ForecastService` |
-| `ai_provider.py` | `AIProvider` interface, `OpenAIProvider` / `MockAIProvider` beans, exactly as specified |
-| `app.py` routes | Spring `@RestController`s, one per resource, same URL paths |
-| `frontend/` vanilla JS | React + TypeScript + Vite + Tailwind + Recharts, same page structure |
-| Single Flask process | `docker-compose.yml` with `frontend`, `backend`, `postgres` services |
-
----
-
-## 5. Synthetic dataset
-
-Generated deterministically (`random.seed(42)` + a fixed exception
-recipe) in `backend/seed.py`:
-
-- **150 payment transactions** (INR, realistic Indian merchant/customer/
-  UPI data — **all synthetic, no real customer data**)
-- **146 settlement records** (some payments deliberately have none —
-  `MISSING_SETTLEMENT`)
-- **150 ledger entries**
-- **10 merchants** across Electronics, Grocery, Travel, Fashion, F&B,
-  Retail, Fitness, Home, Transport, Healthcare
-- **29 deliberately injected exceptions** across all 12 required categories:
-  `AMOUNT_MISMATCH`, `MISSING_SETTLEMENT`, `FEE_MISMATCH`, `TAX_MISMATCH`,
-  `SETTLEMENT_DELAY`, `PARTIAL_SETTLEMENT`, `REFERENCE_MISMATCH`,
-  `LEDGER_MISMATCH`, `DUPLICATE_RECORD` (duplicate transaction and
-  duplicate settlement both roll up to this), `UNKNOWN_TRANSACTION`,
-  `STATUS_MISMATCH`.
-
-Every fresh `POST /api/demo/reset` regenerates the **exact same** dataset
-and the **exact same** reconciliation results — this is intentional, so
-the demo is reproducible on stage.
-
-## 6. Reconciliation methodology
-
-`backend/reconciliation.py` — **pure, deterministic, rule-based.** It
-never asks an LLM whether two records match. It walks every payment,
-finds its settlement and ledger records by `transaction_id`, and applies
-configurable tolerances:
-
-- Amount tolerance: ₹5
-- Fee tolerance: ₹5 (auto-resolve up to ₹50 drift)
-- Tax tolerance: ₹2 (auto-resolve up to ₹15 drift)
-- Date/settlement-delay tolerance: 48 hours (auto-resolve up to 7 days)
-
-States: `MATCHED`, `AUTO_RESOLVED`, `UNRESOLVED`. **An exception is only
-ever marked `AUTO_RESOLVED` if it falls inside these explicit business-
-rule bands** (e.g. a small fee drift, a short settlement delay). Amount
-mismatches, missing settlements, partial settlements, duplicates, unknown
-transactions and reference mismatches are never auto-resolved — they stay
-`UNRESOLVED` and visible, exactly as the brief requires ("honest exception
-list").
-
-## 7. AI methodology
-
-`backend/ai_provider.py` implements the `AIProvider` interface with two
-implementations:
-
-- **`MockAIProvider`** (default, `AI_PROVIDER=mock`): rule-based, natural-
-  language explanations built **only** from the actual payment/settlement/
-  ledger numbers the deterministic engine already computed. No network,
-  no API key, never breaks.
-- **`OpenAIProvider`** (`AI_PROVIDER=openai` + `OPENAI_API_KEY`): calls
-  `POST https://api.openai.com/v1/chat/completions`, with a system prompt
-  that restricts it to the facts supplied and forbids inventing numbers.
-
-The AI **only explains and classifies** what the deterministic engine
-already decided — it never decides whether records match, and never
-silently marks anything resolved.
-
-## 8. Finance Q&A
-
-`POST /api/ai/query` answers grounded questions using live data — try:
-"What is our current cash position?", "How many transactions failed
-reconciliation?", "Why is settlement lower than expected?", "Which
-merchants have the highest reconciliation exceptions?", "What is the
-expected cash position tomorrow?". See the "AI Finance Assistant" page
-in the UI for the full suggested-question list.
-
-## 9. Cash position & forecast
-
-See `backend/cash.py` for the documented, simplified cash calculation
-(opening cash configured with `OPENING_CASH`, default zero; inflows = successful
-payments, outflows = settlements + fees + tax). The forecast uses a
-transparent moving-average model over 1/3/7-day horizons with confidence
-that decreases with horizon length — methodology is shown in the UI, not
-hidden.
-
----
-
-## 10. Known unresolved exceptions
-The demo intentionally creates unresolved exceptions covering issues that require real human intervention: missing settlements from the bank, unknown transactions that never reached the payment layer, partial settlements, massive reference/status mismatch, etc.
-
-## 11. Razorpay Test Mode integration
-FinRecon AI features a secure backend-only validation for Razorpay keys restricted specifically to Test Mode logic (checking the `rzp_test_` prefix). If credentials are authenticated, they are used strictly offline.
-
-## 12. Environment variables
-- `RAZORPAY_KEY_ID`: Razorpay Test Mode Key IF (must start with `rzp_test_`)
-- `RAZORPAY_KEY_SECRET`: Razorpay Test Mode Secret
-- `AI_PROVIDER`: `mock` (default) or `openai`
-- `OPENAI_API_KEY`: Required only if `openai` provider is used.
-- `OPENAI_MODEL`: Model name (default `gpt-4o-mini`)
-- `OPENING_CASH`: Starting cash amount for position/forecast calculations (defaults to `0`).
-- `APP_USERNAME` and `APP_PASSWORD`: Enable HTTP Basic Auth for dashboard and API routes.
-- `FINRECON_ALLOW_IMPORT`: Set to `true` to explicitly enable CSV replacement imports.
-- `FINRECON_DB_PATH`: SQLite file path; imports require a persistent location.
-
-## 13. Local setup
-
-### Requirements
-- Python 3.9+ (Flask and Gunicorn are the pip dependencies; everything else
-  is stdlib)
-- A modern browser with JavaScript enabled
-
-### Start (Linux/Mac)
-```bash
+```sh
 ./start.sh
 ```
-### Start (Windows)
-```
-start.bat
-```
-### Or directly
-```bash
+
+Then open `http://localhost:8080`. To install dependencies and run the backend tests:
+
+```sh
 cd backend
-pip install -r requirements.txt
-python3 app.py
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
 ```
-Then open **http://localhost:8080**
 
-Health check: **http://localhost:8080/api/health**
+The latest verified suite contains **27 passing tests**.
 
-The database auto-seeds synthetic records and reconciles them on first run.
-To use operator data, configure authentication and persistent storage, then
-use **Import CSV Data** to load payment, settlement, and ledger exports.
-The import replaces the active dataset after validating the three files.
+## CSV Imports and Data Safety
 
-### Deploy on Render
+The importer expects one CSV each for payments, settlements, and ledger entries. Required headers are shown in the dashboard's **Import CSV Data** dialog. Import validates all files before replacing the active dataset; malformed input leaves the existing dataset intact.
 
-The repository includes `render.yaml` for a free Render web service. In Render, choose **New + → Blueprint**, connect `sirivally31/FinCorn`, and deploy the `main` branch. Render installs the backend requirements, starts the app with Gunicorn, and checks `/api/health`.
+Imports are disabled unless the server has all of the following configured:
 
-This demo uses SQLite on Render's temporary filesystem. Synthetic data is recreated on startup, but exception decisions and other changes may be lost when the service restarts or redeploys. Do not use this configuration for real financial data. See [PROJECT_GUIDE.md](PROJECT_GUIDE.md) for deployment limitations and production requirements.
+- `APP_USERNAME` and `APP_PASSWORD` to enable HTTP Basic Auth for dashboard and API routes.
+- `FINRECON_ALLOW_IMPORT=true` as explicit import opt-in.
+- `FINRECON_DB_PATH` pointing to a persistent SQLite file.
 
-### Automated quality check
-```bash
-./verify.sh
-```
-Compiles every backend module, runs the full test suite, checks frontend
-JS syntax, boots the server, and hits every core endpoint.
+The current public free Render service has ephemeral storage and is not suitable for confidential financial records. Do not enable imports there. A persistent private deployment needs durable storage, restricted access, backups, and operational controls before loading sensitive data.
 
-## 14. Demo instructions
-To reset a local synthetic dataset to its ground-truth standard state:
-```bash
-curl -X POST http://localhost:8080/api/demo/reset
-```
-The dashboard no longer exposes a destructive demo reset button. **Refresh Current View** reloads the active database view, while **Run Reconciliation** recomputes results without deleting source records.
+Optional settings:
 
----
+- `OPENING_CASH`: opening balance for cash calculations; defaults to `0`.
+- `AI_PROVIDER`: `mock` by default, or `openai`.
+- `OPENAI_API_KEY` and `OPENAI_MODEL`: server-side configuration for the optional OpenAI explanation provider.
+- `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`: optional Test Mode connectivity check only; they do not import records or execute payments.
 
-## 15. API endpoints
+## API
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/health` | Health + loaded payment count |
-| GET | `/api/dashboard/summary` | All headline metrics |
-| POST | `/api/reconciliation/run` | Re-run reconciliation against currently stored source records |
-| POST | `/api/import` | Replace dataset from payment, settlement, and ledger CSV files (requires auth, explicit opt-in, and persistent DB path) |
-| GET | `/api/reconciliations` | List, filterable by `status`, `exceptionType`, `merchantId`, `search` |
-| GET | `/api/reconciliations/{id}` | Full detail incl. payment/settlement/ledger/exceptions |
-| GET | `/api/exceptions` | List, filterable by `status`, `severity` |
-| GET | `/api/exceptions/{id}` | Detail |
-| POST | `/api/exceptions/{id}/resolve` | Mark resolved (audited) |
-| POST | `/api/exceptions/{id}/escalate` | Escalate (audited) |
-| POST | `/api/exceptions/{id}/ignore` | Ignore (audited) |
-| POST | `/api/exceptions/{id}/mark-expected` | Mark expected (audited) |
-| GET | `/api/settlements` | All settlement records |
-| GET | `/api/cash-position` | Live cash position |
-| GET | `/api/cash-forecast` | 1/3/7-day forecast |
-| GET | `/api/merchants` | Per-merchant analytics |
-| GET | `/api/analytics/exceptions` | Exception counts/value by type |
-| POST | `/api/ai/analyze-exception` | Returns the stored AI explanation for one exception |
-| POST | `/api/ai/query` | Finance Q&A |
-| POST | `/api/demo/reset` | Wipe + reseed + re-reconcile |
-| GET | `/api/audit-logs` | Full audit trail |
+| `GET` | `/api/health` | Health and loaded payment count |
+| `GET` | `/api/dashboard/summary` | Dashboard reconciliation and cash metrics |
+| `POST` | `/api/reconciliation/run` | Reconcile records currently stored |
+| `POST` | `/api/import` | Validated replacement import; requires explicit secure configuration |
+| `GET` | `/api/reconciliations` | List and filter reconciliation results |
+| `GET` | `/api/exceptions` | Review discrepancy queue |
+| `GET` | `/api/cash-position` | Current calculated cash position |
+| `GET` | `/api/cash-forecast` | 1-, 3-, and 7-day forecast |
+| `GET` | `/api/audit-logs` | Exception action history |
 
-All errors return structured JSON: `{timestamp, status, error, message, path}`.
+## Synthetic Evaluation Snapshot
 
----
+The reproducible synthetic dataset contains 150 seeded payments, an injected duplicate, and an orphan settlement. In the latest documented evaluation it produced 152 processed records, 123 matched, 8 auto-resolved, and 21 unresolved, for an 86.18% match rate. These are evaluation results, not live financial account metrics. With `OPENING_CASH` unset, the sample's calculated current cash is ₹1,10,071.20 and the seven-day projection is ₹2,10,263.93.
 
-## 12. Testing
+Run `POST /api/demo/reset` only to regenerate the local synthetic evaluation dataset. The dashboard intentionally has no destructive reset button.
 
-`backend/tests/test_reconciliation.py` — **20 tests, all passing** (see
-output below), covering: exact match, amount mismatch, missing
-settlement, duplicate transaction, fee mismatch, tax mismatch, partial
-settlement, unknown transaction, cash calculation, forecast calculation,
-exception resolution workflow, AI grounding (explanations always mention
-the actual transaction ID), and the integration-level checks required by
-the brief (≥100 records seeded, matched+auto_resolved+unresolved ==
-processed, match rate in [0,100], unresolved exceptions exist, metrics
-computed from the database rather than hardcoded).
+## Project and Interview Guide
 
-```
-Ran 27 tests
-OK
-```
-
-## 16. Limitations
-
-- **Not the Java/Spring/React/Postgres/Docker stack originally specified**
-  — see "Why not the originally-specified stack" above. This is a
-  functional substitute built and verified in an environment with no
-  network access; porting notes are provided.
-- **SQLite, not PostgreSQL** — fine for a single-process demo; a real
-  deployment should use the Postgres schema translation notes above.
-- **Authentication is opt-in** — set both `APP_USERNAME` and
-  `APP_PASSWORD` to protect dashboard/API routes. CSV imports also require
-  `FINRECON_ALLOW_IMPORT=true` and a persistent `FINRECON_DB_PATH`.
-- **Free Render storage is ephemeral** — do not enable imports or upload
-  confidential records to the public free demo. Use persistent storage and
-  access controls before handling real financial data.
-- **Cash position model is intentionally simplified** — clearly labelled
-  as such in the UI and in `cash.py`; not GAAP-complete accounting.
-- **OpenAI provider is untested against a live API key** in this
-  environment (no network access) — the mock provider is fully tested and
-  is the default; the OpenAI code path follows the same interface and
-  should work with a valid key, but that specific path was not exercised
-  end-to-end here.
-- **Single Flask dev server** — fine for a demo; a production deployment
-  should sit behind a WSGI server (gunicorn) and a reverse proxy.
-
-## 18. Security notes
-- Secrets are never committed (`.env` is gitignored).
-- Razorpay and OpenAI integrations operate 100% backend-side.
-- No keys are exposed in the frontend or REST API payloads.
-- Test mode is strictly enforced for real keys.
-- CSV import is disabled unless the operator explicitly configures
-  credentials, opt-in, and a persistent database path.
-
-## Future improvements
-
-- Port to the originally-specified Spring Boot + React + PostgreSQL +
-  Docker stack (this codebase is structured to make that port
-  mechanical — see the table in "Architecture").
-- Multi-currency support.
-- Real bank statement (MT940/CAMT.053) ingestion.
-- Configurable tolerance bands per merchant/payment method.
-- Role-based access control and real authentication.
+See [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) for the problem statement, data flow, technology rationale and trade-offs, differentiators, current deployment condition, interview pitches, common questions, and resume bullet.
