@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b1220">
+<meta name="description" content="Autonomous reconciliation and cash intelligence for payment operations.">
+<title>FinRecon AI — Finance operations, in control</title>
+<link rel="stylesheet" href="/landing.css">
+</head>
+  <a class="brand" href="/" aria-label="FinRecon AI home">
+</body>
+</html>
+    <span class="brand-mark">FR</span>
+    <span class="brand-name">FinRecon <b>AI</b></span>
+  </a>
+  <a class="header-link" href="/app">Open dashboard <span aria-hidden="true">↗</span></a>
+</header>
+
+<main>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="eyebrow-dot"></span> FINANCE OPERATIONS, IN CONTROL</p>
+      <h1 id="hero-title">Close the books.<br><span>See the whole picture.</span></h1>
+      <p class="hero-tagline">Autonomous reconciliation and cash intelligence for payment operations</p>
+      <a class="launch-button" href="/app">Launch Dashboard <span aria-hidden="true">→</span></a>
+      <p class="hero-note">A transparent control room for every payment, settlement, and ledger entry.</p>
+    </div>
+    <div class="hero-visual" aria-label="Reconciliation status overview">
+      <div class="visual-topline"><span>RECONCILIATION RUN</span><span class="live-indicator">● LIVE</span></div>
+      <div class="visual-total"><strong id="hero-match">--</strong><span>match rate</span></div>
+      <div class="recon-rows">
+        <div class="recon-row"><span class="row-mark mark-green"></span><span>Matched records</span><strong id="hero-records">--</strong></div>
+        <div class="recon-row"><span class="row-mark mark-amber"></span><span>Exceptions to review</span><strong id="hero-exceptions">--</strong></div>
+        <div class="recon-row"><span class="row-mark mark-blue"></span><span>7-day cash outlook</span><strong id="hero-cash">--</strong></div>
+      </div>
+      <div class="visual-foot"><span>Rules decide. AI explains.</span><span class="pulse-line"></span></div>
+    </div>
+  </section>
+
+  <section class="metrics" aria-labelledby="metrics-title">
+    <div class="section-heading metrics-heading">
+      <div><p class="eyebrow">THE CURRENT PICTURE</p><h2 id="metrics-title">Live operating metrics</h2></div>
+      <span id="metrics-status" class="metrics-status" role="status" aria-live="polite">Connecting to data</span>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric"><span class="metric-label">Records processed</span><strong id="metric-records">--</strong><span class="metric-detail">Current reconciliation run</span></div>
+      <div class="metric"><span class="metric-label">Match rate</span><strong id="metric-match">--</strong><span class="metric-detail">Matched and auto-resolved</span></div>
+      <div class="metric"><span class="metric-label">Open exceptions</span><strong id="metric-exceptions">--</strong><span class="metric-detail">Visible for human review</span></div>
+      <div class="metric"><span class="metric-label">7-day cash forecast</span><strong id="metric-cash">--</strong><span class="metric-detail">Moving-average projection</span></div>
+    </div>
+  </section>
+
+  <section class="capabilities" aria-labelledby="capabilities-title">
+    <div class="section-heading">
+      <div><p class="eyebrow">ONE CLEAR VIEW</p><h2 id="capabilities-title">From payment trail to cash position</h2></div>
+      <p class="section-intro">Deterministic controls for the books. Clear explanations for the people who run them.</p>
+    </div>
+    <div class="feature-grid">
+      <article class="feature">
+        <span class="feature-index">01 / CONTROL</span>
+        <h3>Deterministic Reconciliation</h3>
+        <p>Compare payment, settlement, and ledger records with explicit business rules. Ambiguous items stay visible.</p>
+        <span class="feature-symbol" aria-hidden="true">≋</span>
+      </article>
+      <article class="feature">
+        <span class="feature-index">02 / EXPLAIN</span>
+        <h3>AI Exception Explanations</h3>
+        <p>Grounded summaries explain what differs and why. AI informs the review; it never decides a match.</p>
+        <span class="feature-symbol" aria-hidden="true">◎</span>
+      </article>
+      <article class="feature">
+        <span class="feature-index">03 / FORECAST</span>
+        <h3>Cash Forecast</h3>
+        <p>See current cash, pending settlements, and a transparent short-term projection in one place.</p>
+        <span class="feature-symbol" aria-hidden="true">↗</span>
+      </article>
+      <article class="feature">
+        <span class="feature-index">04 / TRACE</span>
+        <h3>Audit Trail</h3>
+        <p>Keep exception decisions and status changes reviewable with an event history for finance operations.</p>
+        <span class="feature-symbol" aria-hidden="true">⌁</span>
+      </article>
+    </div>
+  </section>
+
+  <section class="closing">
+    <p class="eyebrow">READY WHEN YOU ARE</p>
+    <h2>Make every exception count.</h2>
+    <a class="launch-button" href="/app">Launch Dashboard <span aria-hidden="true">→</span></a>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <a class="brand footer-brand" href="/">
+    <span class="brand-mark">FR</span><span class="brand-name">FinRecon <b>AI</b></span>
+  </a>
+  <span class="footer-note">Synthetic demo data · Built for transparent finance operations</span>
+  <nav class="footer-links" aria-label="Social links">
+    <a href="https://github.com/sirivally31/FinCorn" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+    <a href="https://www.linkedin.com/" target="_blank" rel="noreferrer">LinkedIn <span aria-hidden="true">↗</span></a>
+  </nav>
+</footer>
+
+<script>
+(() => {
+  const number = value => Number(value || 0).toLocaleString("en-IN");
+  const percent = value => `${Number(value || 0).toFixed(2)}%`;
+  const currency = value => new Intl.NumberFormat("en-IN", {
+    style: "currency", currency: "INR", maximumFractionDigits: 0
+  }).format(Number(value || 0));
+
+  fetch("/api/dashboard/summary")
+    .then(response => {
+      if (!response.ok) throw new Error("Metrics unavailable");
+      return response.json();
+    })
+    .then(summary => {
+      document.getElementById("hero-match").textContent = percent(summary.matchRate);
+      document.getElementById("hero-records").textContent = number(summary.matchedRecords);
+      document.getElementById("hero-exceptions").textContent = number(summary.unresolvedExceptions);
+      document.getElementById("hero-cash").textContent = currency(summary.forecastedCash7d);
+      document.getElementById("metric-records").textContent = number(summary.recordsProcessed);
+      document.getElementById("metric-match").textContent = percent(summary.matchRate);
+      document.getElementById("metric-exceptions").textContent = number(summary.unresolvedExceptions);
+      document.getElementById("metric-cash").textContent = currency(summary.forecastedCash7d);
+      document.getElementById("metrics-status").textContent = "Live · just updated";
+      document.getElementById("metrics-status").classList.add("is-live");
+    })
+    .catch(() => {
+      document.getElementById("metrics-status").textContent = "Metrics temporarily unavailable";
+      document.getElementById("metrics-status").classList.add("is-error");
+    });
+})();
+</script>
+</body>
+</html>

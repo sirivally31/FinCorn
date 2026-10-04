@@ -8,7 +8,7 @@ import datetime
 import base64
 import urllib.request
 import urllib.error
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from database import init_db, wipe_data, get_connection
 import seed
@@ -36,7 +36,7 @@ def error_response(status, message):
 def not_found(e):
     if request.path.startswith("/api/"):
         return error_response(404, "Resource not found")
-    return send_from_directory(FRONTEND_DIR, "index.html")
+    return redirect("/app")
 
 
 @app.errorhandler(500)
@@ -47,6 +47,12 @@ def server_error(e):
 # ---------------------------------------------------------------- Frontend
 @app.route("/")
 def index():
+    return send_from_directory(FRONTEND_DIR, "landing.html")
+
+
+@app.route("/app")
+@app.route("/app/<path:anything>")
+def dashboard(anything=None):
     return send_from_directory(FRONTEND_DIR, "index.html")
 
 
